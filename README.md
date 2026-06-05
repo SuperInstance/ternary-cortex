@@ -79,3 +79,11 @@ Part of the SuperInstance ternary crate family. `ternary-cortex` provides the pr
 ## License
 
 MIT
+
+## See Also
+- **ternary-agent** — related
+- **ternary-attention** — related
+- **ternary-predict** — related
+- **ternary-room** — related
+- **ternary-oracle** — related
+
