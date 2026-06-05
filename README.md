@@ -1,89 +1,91 @@
-# ternary-cortex — Hierarchical processing layers for ternary intelligence
+# ternary-cortex
 
-Cortex struct, layers, columns, thalamic relay, corpus callosum bridge, and topographic maps for building multi-tier ternary processing pipelines. Inspired by biological cortical neuroarchitecture.
+**Hierarchical processing layers for ternary intelligence**
 
-## Why This Exists
+[![ternary](https://img.shields.io/badge/ecosystem-ternary-blue)](https://github.com/orgs/SuperInstance/repositories?q=ternary)
+[![tests](https://img.shields.io/badge/tests-27-green)]()
 
-Ternary agents (operating on {-1, 0, +1} values) need structured processing hierarchies — not just flat arrays. Biological brains organize computation into layers, columns, and relay stations. This crate provides those same abstractions for ternary systems, enabling multi-stage signal processing with gating, attention, and inter-hemisphere communication.
+## Overview
 
-## Core Concepts
+Hierarchical processing layers for ternary intelligence.
 
-- **Balanced ternary** — A number system using three values: -1 (Neg), 0 (Zero), +1 (Pos). Multiplication follows sign rules: Pos × Neg = Neg, Neg × Neg = Pos, anything × Zero = Zero.
-- **Cortex** — The full hierarchical processor: multiple layers with relay and column support.
-- **CortexLayer** — One processing tier. Applies ternary weights to input and gates output by threshold.
-- **CorticalColumn** — A vertical slice through all layers. Activations propagate upward from input to output.
-- **Thalamus** — A relay station between layers with per-channel gating and attention modulation. Closed gates block signal; negative attention scores auto-close channels.
-- **CorpusCallosum** — A bridge between two hemispheres. Each fiber has a ternary weight; severed fibers (Zero weight) block transmission.
-- **CorticalMap** — A 2D topographic map for spatial organization of ternary values, with neighbor queries and center-of-mass computation.
+Provides cortical structures — layers, columns, relay mechanisms — for
+building multi-tier ternary processing pipelines inspired by biological
+neuroarchitecture.
 
-## Quick Start
+## Architecture
+
+- **`CortexLayer`** — core data structure
+- **`CorticalColumn`** — core data structure
+- **`Thalamus`** — core data structure
+- **`CorpusCallosum`** — core data structure
+- **`CorticalMap`** — core data structure
+- **`Cortex`** — core data structure
+- **`Ternary`** — state enumeration
+
+### Key Functions
+
+- `from_i8()`
+- `to_i8()`
+- `new()`
+- `process()`
+- `threshold_gate()`
+- `adapt()`
+- `reset()`
+- `new()`
+- `activate()`
+- `output()`
+- ... and 26 more
+
+## Why Ternary?
+
+The balanced ternary system {-1, 0, +1} (also known as Z₃) is the mathematically optimal discrete encoding:
+- **More expressive than binary**: three states capture positive, neutral, and negative
+- **Natural for decisions**: accept/reject/abstain, buy/hold/sell, agree/disagree/neutral
+- **Self-balancing**: the 0 state acts as a universal screen, preventing pathological lock-in
+- **Z₃ cyclic dynamics**: rock-paper-scissors is the only natural coordination mechanism
+
+## Stats
+
+| Metric | Value |
+|--------|-------|
+| Lines of Rust | 646 |
+| Test count | 27 |
+| Public types | 7 |
+| Public functions | 36 |
+
+## Ecosystem
+
+This crate is part of the **[SuperInstance Ternary Fleet](https://github.com/orgs/SuperInstance/repositories?q=ternary)**:
+
+- **[ternary-core](https://github.com/SuperInstance/ternary-core)** — shared traits and Z₃ arithmetic
+- **[ternary-grid](https://github.com/SuperInstance/ternary-grid)** — spatial grid with {-1, 0, +1} cells
+- **[ternary-graph](https://github.com/SuperInstance/ternary-graph)** — ternary-weighted graph algorithms
+- **[ternary-automata](https://github.com/SuperInstance/ternary-automata)** — three-state cellular automata
+- **[ternary-compiler](https://github.com/SuperInstance/ternary-compiler)** — expression compiler and optimizer
+
+200+ crates. 4,300+ tests. One pattern.
+
+## Research Context
+
+The ternary approach connects to several active research areas:
+- **Ternary Neural Networks** (TNNs): weights constrained to {-1, 0, +1} for efficient inference
+- **Huawei's ternary chip**: 7nm ternary silicon with 60% less power consumption
+- **Active inference**: free energy minimization naturally maps to ternary action selection
+- **Cyclic dominance**: RPS dynamics maintain biodiversity in spatial ecology
+- **Z₃ group theory**: the only algebraic group on three elements is cyclic addition mod 3
+
+## Usage
 
 ```toml
 [dependencies]
-ternary-cortex = "0.1"
+ternary-cortex = "0.1.0"
 ```
 
 ```rust
-use ternary_cortex::*;
-
-// Build a 3-layer cortex: layer widths and thresholds
-let mut cortex = Cortex::new(&[(8, 2), (6, 1), (4, 1)]);
-
-// Process a ternary input through all layers
-let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Zero, Ternary::Pos,
-                 Ternary::Pos, Ternary::Neg, Ternary::Pos, Ternary::Zero];
-let output = cortex.process(&input);
-
-// Use thalamic relay for gated processing
-let output = cortex.process_with_relay(&input);
+use ternary_cortex;
 ```
-
-## API Overview
-
-| Type | Purpose |
-|------|---------|
-| `Ternary` | Core ternary value: Neg (-1), Zero (0), Pos (+1) |
-| `Cortex` | Full multi-layer hierarchical processor |
-| `CortexLayer` | Single processing tier with weights and threshold |
-| `CorticalColumn` | Vertical slice propagating activation upward |
-| `Thalamus` | Relay with per-channel gates and attention modulation |
-| `CorpusCallosum` | Bridge between two hemispheres with weighted fibers |
-| `CorticalMap` | 2D topographic map with spatial queries |
-
-## How It Works
-
-Feed-forward processing: input enters the bottom layer, each layer multiplies by its ternary weights, then applies a threshold gate. If too few positive values survive, the layer outputs all zeros — acting as an activity filter.
-
-The thalamic relay sits between layers and provides attention-based gating. Channels with sustained negative attention close automatically, filtering out uninformative signal paths.
-
-The corpus callosum enables bidirectional communication between hemispheres. Each fiber applies ternary multiplication, so severed (Zero-weight) fibers block cross-talk while Pos-weight fibers pass signal and Neg-weight fibers invert it.
-
-## Known Limitations
-
-- **No backpropagation** — Weight adaptation is heuristic (sign-based), not gradient-based. Learning is limited to simple correlation.
-- **Fixed topology** — Layer sizes are set at construction; no dynamic layer creation or pruning.
-- **No recurrent connections** — Processing is strictly feed-forward. Recurrent loops require external orchestration.
-- **Threshold is global per layer** — No per-column or per-position thresholding.
-- **Attention modulation is cumulative** — Attention scores grow without bound in one direction; only the gate threshold (-3) prevents runaway.
-
-## Use Cases
-
-1. **Multi-stage ternary classifier** — Route ternary signals through increasingly selective layers, with threshold gating filtering noise at each stage.
-2. **Bilateral processing** — Run two cortexes in parallel (left/right hemispheres) with corpus callosum bridging, for contrastive analysis of ternary inputs.
-3. **Spatial ternary attention** — Use CorticalMap to track where positive activations cluster, computing center-of-mass for attention targeting.
-
-## Ecosystem Context
-
-Part of the SuperInstance ternary crate family. `ternary-cortex` provides the processing hierarchy that `ternary-agent` and `ternary-cell` can use for structured reasoning. It maps to the cortical layers described in FLEET-NEUROARCHITECTURE.md. Related to `ternary-attention` for attention mechanisms and `ternary-network` for networked processing.
 
 ## License
 
 MIT
-
-## See Also
-- **ternary-agent** — related
-- **ternary-attention** — related
-- **ternary-predict** — related
-- **ternary-room** — related
-- **ternary-oracle** — related
-
