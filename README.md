@@ -1,90 +1,78 @@
-# ternary-cortex
+# Ternary Cortex — Hierarchical Processing Layers for Ternary Intelligence
 
-**Hierarchical processing layers for ternary intelligence**
+**Ternary Cortex** implements multi-tier ternary processing inspired by biological cortical architecture. It provides `CortexLayer` units that perform ternary-weighted transformations, threshold gating for attention-like filtering, and Hebbian-style weight adaptation — all using {-1, 0, +1} arithmetic. Layers stack into hierarchical pipelines where lower tiers extract features and higher tiers integrate decisions.
 
-[![ternary](https://img.shields.io/badge/ecosystem-ternary-blue)](https://github.com/orgs/SuperInstance/repositories?q=ternary)
-[![tests](https://img.shields.io/badge/tests-27-green)]()
+## Why It Matters
 
-## Overview
+Deep neural networks achieve intelligence through hierarchical feature extraction, but traditional networks use full-precision weights that are expensive to store and compute. Ternary cortex layers use {-1, 0, +1} weights, reducing memory by 16× and replacing multiply-accumulate (MAC) operations with conditional add/subtract/skip — operations that are 3-5× faster on commodity hardware. The cortical architecture adds biological plausibility: threshold gating mimics how real cortical columns suppress weak signals, and the learning rate controls Hebbian adaptation. This crate provides the building blocks for constructing multi-layer ternary intelligence systems without GPU dependencies.
 
-Hierarchical processing layers for ternary intelligence.
+## How It Works
 
-Provides cortical structures — layers, columns, relay mechanisms — for
-building multi-tier ternary processing pipelines inspired by biological
-neuroarchitecture.
+### CortexLayer
 
-## Architecture
+Each layer maintains a vector of ternary weights initialized to Zero (the neutral state). The `process()` method computes element-wise ternary multiplication between input and weights:
 
-- **`CortexLayer`** — core data structure
-- **`CorticalColumn`** — core data structure
-- **`Thalamus`** — core data structure
-- **`CorpusCallosum`** — core data structure
-- **`CorticalMap`** — core data structure
-- **`Cortex`** — core data structure
-- **`Ternary`** — state enumeration
-
-### Key Functions
-
-- `from_i8()`
-- `to_i8()`
-- `new()`
-- `process()`
-- `threshold_gate()`
-- `adapt()`
-- `reset()`
-- `new()`
-- `activate()`
-- `output()`
-- ... and 26 more
-
-## Why Ternary?
-
-The balanced ternary system {-1, 0, +1} (also known as Z₃) is the mathematically optimal discrete encoding:
-- **More expressive than binary**: three states capture positive, neutral, and negative
-- **Natural for decisions**: accept/reject/abstain, buy/hold/sell, agree/disagree/neutral
-- **Self-balancing**: the 0 state acts as a universal screen, preventing pathological lock-in
-- **Z₃ cyclic dynamics**: rock-paper-scissors is the only natural coordination mechanism
-
-## Stats
-
-| Metric | Value |
-|--------|-------|
-| Lines of Rust | 646 |
-| Test count | 27 |
-| Public types | 7 |
-| Public functions | 36 |
-
-## Ecosystem
-
-This crate is part of the **[SuperInstance Ternary Fleet](https://github.com/orgs/SuperInstance/repositories?q=ternary)**:
-
-- **[ternary-core](https://github.com/SuperInstance/ternary-core)** — shared traits and Z₃ arithmetic
-- **[ternary-grid](https://github.com/SuperInstance/ternary-grid)** — spatial grid with {-1, 0, +1} cells
-- **[ternary-graph](https://github.com/SuperInstance/ternary-graph)** — ternary-weighted graph algorithms
-- **[ternary-automata](https://github.com/SuperInstance/ternary-automata)** — three-state cellular automata
-- **[ternary-compiler](https://github.com/SuperInstance/ternary-compiler)** — expression compiler and optimizer
-
-200+ crates. 4,300+ tests. One pattern.
-
-## Research Context
-
-The ternary approach connects to several active research areas:
-- **Ternary Neural Networks** (TNNs): weights constrained to {-1, 0, +1} for efficient inference
-- **Huawei's ternary chip**: 7nm ternary silicon with 60% less power consumption
-- **Active inference**: free energy minimization naturally maps to ternary action selection
-- **Cyclic dominance**: RPS dynamics maintain biodiversity in spatial ecology
-- **Z₃ group theory**: the only algebraic group on three elements is cyclic addition mod 3
-
-## Usage
-
-```toml
-[dependencies]
-ternary-cortex = "0.1.0"
 ```
+output[i] = input[i] × weight[i]   (ternary multiplication in Z₃)
+```
+
+Ternary multiplication follows the rules: (+1·+1)=+1, (-1·-1)=+1, (+1·-1)=-1, and anything × 0 = 0. This is equivalent to sign multiplication with a kill state. Processing is O(n) for n weights.
+
+### Threshold Gating
+
+After processing, the `threshold_gate()` suppresses all output unless enough positive values are present. If the count of positive outputs ≥ threshold, the full output vector passes through; otherwise, all values are zeroed. This implements a **k-of-n gate** — a form of attention that prevents weak signals from propagating up the hierarchy.
+
+### Hebbian Adaptation
+
+Weights adapt based on input and error signals using a ternary Hebbian rule:
+
+```
+(Pos, Pos) → Pos    (reinforce positive correlation)
+(Neg, Pos) → Pos    (flip to match error direction)  
+(Pos, Neg) → Neg    (flip to match error direction)
+```
+
+The learning rate modulates which weights update on each step. This is a discretized version of the delta rule: `Δw = η · error · input`, where the result is quantized to {-1, 0, +1}.
+
+## Quick Start
 
 ```rust
-use ternary_cortex;
+use ternary_cortex::{Ternary, CortexLayer};
+
+let mut layer = CortexLayer::new(0, 4, 2); // id=0, width=4, threshold=2
+layer.weights = vec![Ternary::Pos, Ternary::Neg, Ternary::Zero, Ternary::Pos];
+
+let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Pos, Ternary::Pos];
+let processed = layer.process(&input);
+// [Pos, Neg, Zero, Pos]
+
+let gated = layer.threshold_gate(&processed);
+// Pos count = 2 >= threshold 2, so output passes through
 ```
+
+```bash
+cargo add ternary-cortex
+```
+
+## API
+
+| Type / Function | Description |
+|---|---|
+| `Ternary` | Enum: `Neg(-1)`, `Zero(0)`, `Pos(1)` |
+| `CortexLayer` | `{ id, width, weights, threshold, learning_rate }` |
+| `CortexLayer::process(&[Ternary])` | Element-wise ternary multiply (O(n)) |
+| `CortexLayer::threshold_gate(&[Ternary])` | k-of-n attention gate |
+| `CortexLayer::adapt(&[Ternary], &[Ternary])` | Hebbian weight update |
+
+## Architecture Notes
+
+The cortex is the reasoning substrate in **SuperInstance**. Stacked cortical layers form the processing pipeline that transforms raw ternary inputs (sensor data, agent votes) into fleet-wide decisions. The γ + η = C conservation law manifests at each layer: the threshold gate ensures that only sufficiently strong growth signals (γ) propagate, while weak signals return to entropy (η). See [Architecture](https://github.com/SuperInstance/SuperInstance/blob/main/ARCHITECTURE.md).
+
+## References
+
+- Hubel, David & Wiesel, Torsten. "Receptive Fields, Binocular Interaction and Functional Architecture in the Cat's Visual Cortex," *J. Physiology*, 160(1), 1962 — cortical columns.
+- Hebb, Donald O. *The Organization of Behavior*, Wiley, 1949 — Hebbian learning.
+- Li, Feng et al. "Ternary Weight Networks," *arXiv:1605.04711*, 2016 — ternary quantization.
 
 ## License
 
