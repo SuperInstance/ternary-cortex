@@ -621,15 +621,33 @@ mod tests {
     #[test]
     fn test_cortex_process() {
         let mut cortex = Cortex::new(&[(4, 1), (4, 1)]);
-        // Set all weights to Pos on first layer
-        for w in &mut cortex.layers[0].weights {
-            *w = Ternary::Pos;
+        // Set all weights to Pos on both layers
+        for layer in &mut cortex.layers {
+            for w in &mut layer.weights {
+                *w = Ternary::Pos;
+            }
         }
         let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Pos, Ternary::Pos];
         let out = cortex.process(&input);
-        // Layer 1 weights are Zero, so process output is all Zero, fails threshold → all Zero
-        // This is expected: without trained weights, cortex outputs zero
-        assert!(out.iter().all(|&v| v == Ternary::Zero) || out.iter().all(|&v| v == Ternary::Pos));
+        // Layer 0: Pos⊙Pos=Pos for all 4, threshold 1: 4≥1 → [Pos;4]
+        // Layer 1: Pos⊙Pos=Pos for all 4, threshold 1: 4≥1 → [Pos;4]
+        assert_eq!(out, vec![Ternary::Pos; 4]);
+    }
+
+    #[test]
+    fn test_cortex_process_threshold_blocks() {
+        let mut cortex = Cortex::new(&[(4, 1), (4, 3)]);
+        for layer in &mut cortex.layers {
+            for w in &mut layer.weights {
+                *w = Ternary::Pos;
+            }
+        }
+        // Only 2 positives — layer 1 threshold is 3, so output is blocked
+        let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Zero, Ternary::Zero];
+        let out = cortex.process(&input);
+        // Layer 0: [Pos,Pos,Zero,Zero], threshold 1: 2≥1 → pass
+        // Layer 1: [Pos,Pos,Zero,Zero], threshold 3: 2<3 → blocked → [Zero;4]
+        assert_eq!(out, vec![Ternary::Zero; 4]);
     }
 
     #[test]
@@ -649,7 +667,10 @@ mod tests {
         }
         let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Pos];
         let out = cortex.process_with_relay(&input);
-        assert_eq!(out.len(), 3);
+        // Layer 0: Pos⊙Pos=Pos, threshold 1: 3≥1 → [Pos;3]
+        // Relay (all gates open): [Pos;3]
+        // Layer 1: Pos⊙Pos=Pos, threshold 1: 3≥1 → [Pos;3]
+        assert_eq!(out, vec![Ternary::Pos; 3]);
     }
 
     #[test]
