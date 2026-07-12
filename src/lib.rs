@@ -52,12 +52,13 @@ impl CortexLayer {
 
     /// Ternary multiplication of input by weights.
     pub fn process(&self, input: &[Ternary]) -> Vec<Ternary> {
-        let mut output = Vec::with_capacity(self.width);
-        for i in 0..self.width.min(input.len()) {
-            let product = ternary_mul(input[i], self.weights[i]);
-            output.push(product);
-        }
-        output
+        let limit = self.width.min(input.len());
+        input
+            .iter()
+            .zip(&self.weights)
+            .take(limit)
+            .map(|(&inp, &w)| ternary_mul(inp, w))
+            .collect()
     }
 
     /// Threshold gate: suppress all output if not enough positives.
@@ -148,9 +149,10 @@ impl Thalamus {
     }
 
     pub fn receive(&mut self, input: &[Ternary]) {
-        for i in 0..self.buffer.len().min(input.len()) {
+        let limit = self.buffer.len().min(input.len());
+        for (i, &inp) in input.iter().enumerate().take(limit) {
             if self.gates[i] {
-                self.buffer[i] = input[i];
+                self.buffer[i] = inp;
             }
         }
     }
@@ -166,8 +168,9 @@ impl Thalamus {
     }
 
     pub fn modulate_attention(&mut self, signal: &[i32]) {
-        for i in 0..self.attention.len().min(signal.len()) {
-            self.attention[i] += signal[i];
+        let limit = self.attention.len().min(signal.len());
+        for (i, &sig) in signal.iter().enumerate().take(limit) {
+            self.attention[i] += sig;
             if self.attention[i] < -3 {
                 self.gates[i] = false;
             } else if self.attention[i] > 0 {
@@ -207,23 +210,29 @@ impl CorpusCallosum {
     }
 
     pub fn receive_left(&mut self, signals: &[Ternary]) {
-        for i in 0..self.left_buffer.len().min(signals.len()) {
-            self.left_buffer[i] = signals[i];
-        }
+        let limit = self.left_buffer.len().min(signals.len());
+        self.left_buffer[..limit].copy_from_slice(&signals[..limit]);
     }
 
     pub fn receive_right(&mut self, signals: &[Ternary]) {
-        for i in 0..self.right_buffer.len().min(signals.len()) {
-            self.right_buffer[i] = signals[i];
-        }
+        let limit = self.right_buffer.len().min(signals.len());
+        self.right_buffer[..limit].copy_from_slice(&signals[..limit]);
     }
 
     pub fn transfer_left_to_right(&self) -> Vec<Ternary> {
-        self.left_buffer.iter().zip(&self.weights).map(|(&s, &w)| ternary_mul(s, w)).collect()
+        self.left_buffer
+            .iter()
+            .zip(&self.weights)
+            .map(|(&s, &w)| ternary_mul(s, w))
+            .collect()
     }
 
     pub fn transfer_right_to_left(&self) -> Vec<Ternary> {
-        self.right_buffer.iter().zip(&self.weights).map(|(&s, &w)| ternary_mul(s, w)).collect()
+        self.right_buffer
+            .iter()
+            .zip(&self.weights)
+            .map(|(&s, &w)| ternary_mul(s, w))
+            .collect()
     }
 
     pub fn sever_fiber(&mut self, index: usize) {
@@ -333,7 +342,8 @@ impl Cortex {
         let max_w = layer_sizes.iter().map(|&(w, _)| w).max().unwrap_or(0);
         let depth = layers.len();
 
-        let columns: Vec<CorticalColumn> = (0..max_w).map(|i| CorticalColumn::new(i, depth)).collect();
+        let columns: Vec<CorticalColumn> =
+            (0..max_w).map(|i| CorticalColumn::new(i, depth)).collect();
 
         Self {
             layers,
