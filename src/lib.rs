@@ -691,4 +691,116 @@ mod tests {
         assert_eq!(t.relay(), &[Ternary::Zero, Ternary::Zero]);
         assert_eq!(t.open_channel_count(), 2);
     }
+
+    // ---- Missing coverage for untested methods and branches ----
+
+    #[test]
+    fn test_corpus_callosum_transfer_right_to_left() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.receive_right(&[Ternary::Neg, Ternary::Pos, Ternary::Zero]);
+        let left = cc.transfer_right_to_left();
+        // weights default to Pos, so transfer = signal ⊙ Pos = signal
+        assert_eq!(left, vec![Ternary::Neg, Ternary::Pos, Ternary::Zero]);
+    }
+
+    #[test]
+    fn test_corpus_callosum_sever_affects_transfer_right_to_left() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.sever_fiber(0);
+        cc.receive_right(&[Ternary::Pos, Ternary::Pos, Ternary::Pos]);
+        let left = cc.transfer_right_to_left();
+        assert_eq!(left[0], Ternary::Zero); // severed fiber blocks transfer
+        assert_eq!(left[1], Ternary::Pos);
+        assert_eq!(left[2], Ternary::Pos);
+    }
+
+    #[test]
+    fn test_corpus_callosum_sever_out_of_bounds_noop() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.sever_fiber(99); // should not panic
+        assert_eq!(cc.active_fiber_count(), 3);
+    }
+
+    #[test]
+    fn test_cortical_column_reset() {
+        let mut col = CorticalColumn::new(0, 3);
+        col.activate(Ternary::Pos);
+        col.activate(Ternary::Neg);
+        assert!(col.active);
+        col.reset();
+        assert!(!col.active);
+        assert!(col.activations.iter().all(|&a| a == Ternary::Zero));
+    }
+
+    #[test]
+    fn test_cortical_column_output_empty() {
+        let col = CorticalColumn::new(0, 0);
+        assert_eq!(col.output(), Ternary::Zero); // no activations → default Zero
+    }
+
+    #[test]
+    fn test_cortical_map_clear() {
+        let mut m = CorticalMap::new(2, 2);
+        m.set(0, 0, Ternary::Pos);
+        m.set(1, 1, Ternary::Neg);
+        m.clear();
+        assert_eq!(m.get(0, 0), Some(Ternary::Zero));
+        assert_eq!(m.get(1, 1), Some(Ternary::Zero));
+    }
+
+    #[test]
+    fn test_cortical_map_set_out_of_bounds() {
+        let mut m = CorticalMap::new(2, 2);
+        assert!(!m.set(2, 0, Ternary::Pos)); // x out of bounds
+        assert!(!m.set(0, 2, Ternary::Pos)); // y out of bounds
+        assert!(m.set(1, 1, Ternary::Pos)); // valid
+    }
+
+    #[test]
+    fn test_cortical_map_neighbors_edge() {
+        let m = CorticalMap::new(3, 3);
+        let n = m.neighbors(2, 0); // top-right edge
+        assert_eq!(n.len(), 2); // right edge: left + below
+    }
+
+    #[test]
+    fn test_cortex_layer_process_short_input() {
+        let mut layer = CortexLayer::new(0, 4, 1);
+        layer.weights = vec![Ternary::Pos; 4];
+        let input = vec![Ternary::Pos, Ternary::Neg]; // shorter than width
+        let out = layer.process(&input);
+        assert_eq!(out, vec![Ternary::Pos, Ternary::Neg]); // only 2 elements
+    }
+
+    #[test]
+    fn test_cortex_layer_process_long_input() {
+        let mut layer = CortexLayer::new(0, 2, 1);
+        layer.weights = vec![Ternary::Pos; 2];
+        let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos]; // longer than width
+        let out = layer.process(&input);
+        assert_eq!(out, vec![Ternary::Pos, Ternary::Neg]); // truncated to width
+    }
+
+    #[test]
+    fn test_thalamus_set_gate_out_of_bounds_noop() {
+        let mut t = Thalamus::new(2);
+        t.set_gate(99, false); // should not panic
+        assert_eq!(t.open_channel_count(), 2);
+    }
+
+    #[test]
+    fn test_thalamus_modulate_attention_hysteresis() {
+        // Attention in (-3, 0] should leave gate unchanged
+        let mut t = Thalamus::new(2);
+        t.set_gate(0, false);
+        t.modulate_attention(&[-1]); // -3 < -1, but -1 is NOT < -3
+        assert!(!t.gates[0]); // gate unchanged (was closed, stays closed)
+    }
+
+    #[test]
+    fn test_ternary_mul_all_neg_combinations() {
+        // Verify zero is absorbing on both sides
+        assert_eq!(ternary_mul(Ternary::Neg, Ternary::Zero), Ternary::Zero);
+        assert_eq!(ternary_mul(Ternary::Zero, Ternary::Neg), Ternary::Zero);
+    }
 }
