@@ -77,9 +77,9 @@ impl CortexLayer {
             if error[i] != Ternary::Zero && (self.learning_rate as usize) > i % 10 {
                 self.weights[i] = match (input[i], error[i]) {
                     (Ternary::Pos, Ternary::Pos) => Ternary::Pos,
-                    (Ternary::Neg, Ternary::Pos) => Ternary::Pos,
+                    (Ternary::Neg, Ternary::Pos) => Ternary::Neg,
                     (Ternary::Pos, Ternary::Neg) => Ternary::Neg,
-                    (Ternary::Neg, Ternary::Neg) => Ternary::Neg,
+                    (Ternary::Neg, Ternary::Neg) => Ternary::Pos,
                     _ => self.weights[i],
                 };
             }
@@ -470,9 +470,26 @@ mod tests {
         let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Zero];
         let error = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos];
         layer.adapt(&input, &error);
+        // Hebbian rule: w[i] = sign(x[i] × e[i])
+        // i=0: sign(+1 × +1) = +1 → Pos
         assert_eq!(layer.weights[0], Ternary::Pos);
-        assert_eq!(layer.weights[1], Ternary::Neg);
-        assert_eq!(layer.weights[2], Ternary::Zero); // error was Pos but input Zero → unchanged
+        // i=1: sign(-1 × -1) = +1 → Pos
+        assert_eq!(layer.weights[1], Ternary::Pos);
+        // i=2: input is Zero → weight unchanged (stays Zero)
+        assert_eq!(layer.weights[2], Ternary::Zero);
+    }
+
+    #[test]
+    fn test_cortex_layer_adapt_all_nonzero_combos() {
+        // Verify the full Hebbian truth table: w[i] = sign(x[i] × e[i])
+        let mut layer = CortexLayer::new(0, 4, 1);
+        let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos, Ternary::Neg];
+        let error = vec![Ternary::Pos, Ternary::Pos, Ternary::Neg, Ternary::Neg];
+        layer.adapt(&input, &error);
+        assert_eq!(layer.weights[0], Ternary::Pos); // +1 × +1 = +1
+        assert_eq!(layer.weights[1], Ternary::Neg); // -1 × +1 = -1
+        assert_eq!(layer.weights[2], Ternary::Neg); // +1 × -1 = -1
+        assert_eq!(layer.weights[3], Ternary::Pos); // -1 × -1 = +1
     }
 
     #[test]
