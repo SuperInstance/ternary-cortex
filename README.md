@@ -66,9 +66,9 @@ Specifically:
 | x[i] | e[i] | New w[i] |
 |------|------|----------|
 | +1 | +1 | +1 |
-| −1 | +1 | +1 |
+| −1 | +1 | −1 |
 | +1 | −1 | −1 |
-| −1 | −1 | −1 |
+| −1 | −1 | +1 |
 | 0  | *  | unchanged |
 | *  | 0  | unchanged |
 
@@ -81,7 +81,9 @@ This is a **discretized delta rule**: Δw = η · e · x, where the result is qu
 A `CorticalColumn` is a vertical slice through all layers — analogous to a **minicolumn** in biological cortex (~100 neurons deep). It maintains a shift register of activations across depth d:
 
 ```
-activate(x): shift all activations down by 1, insert x at position 0
+activate(x): if x ≠ 0, shift all activations down by 1, insert x at
+             position 0, mark column active; if x = 0, mark column
+             inactive (no shift)
 output(): return activation at depth d-1
 ```
 

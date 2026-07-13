@@ -52,12 +52,13 @@ impl CortexLayer {
 
     /// Ternary multiplication of input by weights.
     pub fn process(&self, input: &[Ternary]) -> Vec<Ternary> {
-        let mut output = Vec::with_capacity(self.width);
-        for i in 0..self.width.min(input.len()) {
-            let product = ternary_mul(input[i], self.weights[i]);
-            output.push(product);
-        }
-        output
+        let limit = self.width.min(input.len());
+        input
+            .iter()
+            .zip(&self.weights)
+            .take(limit)
+            .map(|(&inp, &w)| ternary_mul(inp, w))
+            .collect()
     }
 
     /// Threshold gate: suppress all output if not enough positives.
@@ -76,9 +77,9 @@ impl CortexLayer {
             if error[i] != Ternary::Zero && (self.learning_rate as usize) > i % 10 {
                 self.weights[i] = match (input[i], error[i]) {
                     (Ternary::Pos, Ternary::Pos) => Ternary::Pos,
-                    (Ternary::Neg, Ternary::Pos) => Ternary::Pos,
+                    (Ternary::Neg, Ternary::Pos) => Ternary::Neg,
                     (Ternary::Pos, Ternary::Neg) => Ternary::Neg,
-                    (Ternary::Neg, Ternary::Neg) => Ternary::Neg,
+                    (Ternary::Neg, Ternary::Neg) => Ternary::Pos,
                     _ => self.weights[i],
                 };
             }
@@ -148,9 +149,10 @@ impl Thalamus {
     }
 
     pub fn receive(&mut self, input: &[Ternary]) {
-        for i in 0..self.buffer.len().min(input.len()) {
+        let limit = self.buffer.len().min(input.len());
+        for (i, &inp) in input.iter().enumerate().take(limit) {
             if self.gates[i] {
-                self.buffer[i] = input[i];
+                self.buffer[i] = inp;
             }
         }
     }
@@ -166,8 +168,9 @@ impl Thalamus {
     }
 
     pub fn modulate_attention(&mut self, signal: &[i32]) {
-        for i in 0..self.attention.len().min(signal.len()) {
-            self.attention[i] += signal[i];
+        let limit = self.attention.len().min(signal.len());
+        for (i, &sig) in signal.iter().enumerate().take(limit) {
+            self.attention[i] += sig;
             if self.attention[i] < -3 {
                 self.gates[i] = false;
             } else if self.attention[i] > 0 {
@@ -207,23 +210,29 @@ impl CorpusCallosum {
     }
 
     pub fn receive_left(&mut self, signals: &[Ternary]) {
-        for i in 0..self.left_buffer.len().min(signals.len()) {
-            self.left_buffer[i] = signals[i];
-        }
+        let limit = self.left_buffer.len().min(signals.len());
+        self.left_buffer[..limit].copy_from_slice(&signals[..limit]);
     }
 
     pub fn receive_right(&mut self, signals: &[Ternary]) {
-        for i in 0..self.right_buffer.len().min(signals.len()) {
-            self.right_buffer[i] = signals[i];
-        }
+        let limit = self.right_buffer.len().min(signals.len());
+        self.right_buffer[..limit].copy_from_slice(&signals[..limit]);
     }
 
     pub fn transfer_left_to_right(&self) -> Vec<Ternary> {
-        self.left_buffer.iter().zip(&self.weights).map(|(&s, &w)| ternary_mul(s, w)).collect()
+        self.left_buffer
+            .iter()
+            .zip(&self.weights)
+            .map(|(&s, &w)| ternary_mul(s, w))
+            .collect()
     }
 
     pub fn transfer_right_to_left(&self) -> Vec<Ternary> {
-        self.right_buffer.iter().zip(&self.weights).map(|(&s, &w)| ternary_mul(s, w)).collect()
+        self.right_buffer
+            .iter()
+            .zip(&self.weights)
+            .map(|(&s, &w)| ternary_mul(s, w))
+            .collect()
     }
 
     pub fn sever_fiber(&mut self, index: usize) {
@@ -333,7 +342,8 @@ impl Cortex {
         let max_w = layer_sizes.iter().map(|&(w, _)| w).max().unwrap_or(0);
         let depth = layers.len();
 
-        let columns: Vec<CorticalColumn> = (0..max_w).map(|i| CorticalColumn::new(i, depth)).collect();
+        let columns: Vec<CorticalColumn> =
+            (0..max_w).map(|i| CorticalColumn::new(i, depth)).collect();
 
         Self {
             layers,
@@ -460,9 +470,26 @@ mod tests {
         let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Zero];
         let error = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos];
         layer.adapt(&input, &error);
+        // Hebbian rule: w[i] = sign(x[i] × e[i])
+        // i=0: sign(+1 × +1) = +1 → Pos
         assert_eq!(layer.weights[0], Ternary::Pos);
-        assert_eq!(layer.weights[1], Ternary::Neg);
-        assert_eq!(layer.weights[2], Ternary::Zero); // error was Pos but input Zero → unchanged
+        // i=1: sign(-1 × -1) = +1 → Pos
+        assert_eq!(layer.weights[1], Ternary::Pos);
+        // i=2: input is Zero → weight unchanged (stays Zero)
+        assert_eq!(layer.weights[2], Ternary::Zero);
+    }
+
+    #[test]
+    fn test_cortex_layer_adapt_all_nonzero_combos() {
+        // Verify the full Hebbian truth table: w[i] = sign(x[i] × e[i])
+        let mut layer = CortexLayer::new(0, 4, 1);
+        let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos, Ternary::Neg];
+        let error = vec![Ternary::Pos, Ternary::Pos, Ternary::Neg, Ternary::Neg];
+        layer.adapt(&input, &error);
+        assert_eq!(layer.weights[0], Ternary::Pos); // +1 × +1 = +1
+        assert_eq!(layer.weights[1], Ternary::Neg); // -1 × +1 = -1
+        assert_eq!(layer.weights[2], Ternary::Neg); // +1 × -1 = -1
+        assert_eq!(layer.weights[3], Ternary::Pos); // -1 × -1 = +1
     }
 
     #[test]
@@ -594,15 +621,33 @@ mod tests {
     #[test]
     fn test_cortex_process() {
         let mut cortex = Cortex::new(&[(4, 1), (4, 1)]);
-        // Set all weights to Pos on first layer
-        for w in &mut cortex.layers[0].weights {
-            *w = Ternary::Pos;
+        // Set all weights to Pos on both layers
+        for layer in &mut cortex.layers {
+            for w in &mut layer.weights {
+                *w = Ternary::Pos;
+            }
         }
         let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Pos, Ternary::Pos];
         let out = cortex.process(&input);
-        // Layer 1 weights are Zero, so process output is all Zero, fails threshold → all Zero
-        // This is expected: without trained weights, cortex outputs zero
-        assert!(out.iter().all(|&v| v == Ternary::Zero) || out.iter().all(|&v| v == Ternary::Pos));
+        // Layer 0: Pos⊙Pos=Pos for all 4, threshold 1: 4≥1 → [Pos;4]
+        // Layer 1: Pos⊙Pos=Pos for all 4, threshold 1: 4≥1 → [Pos;4]
+        assert_eq!(out, vec![Ternary::Pos; 4]);
+    }
+
+    #[test]
+    fn test_cortex_process_threshold_blocks() {
+        let mut cortex = Cortex::new(&[(4, 1), (4, 3)]);
+        for layer in &mut cortex.layers {
+            for w in &mut layer.weights {
+                *w = Ternary::Pos;
+            }
+        }
+        // Only 2 positives — layer 1 threshold is 3, so output is blocked
+        let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Zero, Ternary::Zero];
+        let out = cortex.process(&input);
+        // Layer 0: [Pos,Pos,Zero,Zero], threshold 1: 2≥1 → pass
+        // Layer 1: [Pos,Pos,Zero,Zero], threshold 3: 2<3 → blocked → [Zero;4]
+        assert_eq!(out, vec![Ternary::Zero; 4]);
     }
 
     #[test]
@@ -622,7 +667,10 @@ mod tests {
         }
         let input = vec![Ternary::Pos, Ternary::Pos, Ternary::Pos];
         let out = cortex.process_with_relay(&input);
-        assert_eq!(out.len(), 3);
+        // Layer 0: Pos⊙Pos=Pos, threshold 1: 3≥1 → [Pos;3]
+        // Relay (all gates open): [Pos;3]
+        // Layer 1: Pos⊙Pos=Pos, threshold 1: 3≥1 → [Pos;3]
+        assert_eq!(out, vec![Ternary::Pos; 3]);
     }
 
     #[test]
@@ -642,5 +690,117 @@ mod tests {
         t.reset();
         assert_eq!(t.relay(), &[Ternary::Zero, Ternary::Zero]);
         assert_eq!(t.open_channel_count(), 2);
+    }
+
+    // ---- Missing coverage for untested methods and branches ----
+
+    #[test]
+    fn test_corpus_callosum_transfer_right_to_left() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.receive_right(&[Ternary::Neg, Ternary::Pos, Ternary::Zero]);
+        let left = cc.transfer_right_to_left();
+        // weights default to Pos, so transfer = signal ⊙ Pos = signal
+        assert_eq!(left, vec![Ternary::Neg, Ternary::Pos, Ternary::Zero]);
+    }
+
+    #[test]
+    fn test_corpus_callosum_sever_affects_transfer_right_to_left() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.sever_fiber(0);
+        cc.receive_right(&[Ternary::Pos, Ternary::Pos, Ternary::Pos]);
+        let left = cc.transfer_right_to_left();
+        assert_eq!(left[0], Ternary::Zero); // severed fiber blocks transfer
+        assert_eq!(left[1], Ternary::Pos);
+        assert_eq!(left[2], Ternary::Pos);
+    }
+
+    #[test]
+    fn test_corpus_callosum_sever_out_of_bounds_noop() {
+        let mut cc = CorpusCallosum::new(3);
+        cc.sever_fiber(99); // should not panic
+        assert_eq!(cc.active_fiber_count(), 3);
+    }
+
+    #[test]
+    fn test_cortical_column_reset() {
+        let mut col = CorticalColumn::new(0, 3);
+        col.activate(Ternary::Pos);
+        col.activate(Ternary::Neg);
+        assert!(col.active);
+        col.reset();
+        assert!(!col.active);
+        assert!(col.activations.iter().all(|&a| a == Ternary::Zero));
+    }
+
+    #[test]
+    fn test_cortical_column_output_empty() {
+        let col = CorticalColumn::new(0, 0);
+        assert_eq!(col.output(), Ternary::Zero); // no activations → default Zero
+    }
+
+    #[test]
+    fn test_cortical_map_clear() {
+        let mut m = CorticalMap::new(2, 2);
+        m.set(0, 0, Ternary::Pos);
+        m.set(1, 1, Ternary::Neg);
+        m.clear();
+        assert_eq!(m.get(0, 0), Some(Ternary::Zero));
+        assert_eq!(m.get(1, 1), Some(Ternary::Zero));
+    }
+
+    #[test]
+    fn test_cortical_map_set_out_of_bounds() {
+        let mut m = CorticalMap::new(2, 2);
+        assert!(!m.set(2, 0, Ternary::Pos)); // x out of bounds
+        assert!(!m.set(0, 2, Ternary::Pos)); // y out of bounds
+        assert!(m.set(1, 1, Ternary::Pos)); // valid
+    }
+
+    #[test]
+    fn test_cortical_map_neighbors_edge() {
+        let m = CorticalMap::new(3, 3);
+        let n = m.neighbors(2, 0); // top-right edge
+        assert_eq!(n.len(), 2); // right edge: left + below
+    }
+
+    #[test]
+    fn test_cortex_layer_process_short_input() {
+        let mut layer = CortexLayer::new(0, 4, 1);
+        layer.weights = vec![Ternary::Pos; 4];
+        let input = vec![Ternary::Pos, Ternary::Neg]; // shorter than width
+        let out = layer.process(&input);
+        assert_eq!(out, vec![Ternary::Pos, Ternary::Neg]); // only 2 elements
+    }
+
+    #[test]
+    fn test_cortex_layer_process_long_input() {
+        let mut layer = CortexLayer::new(0, 2, 1);
+        layer.weights = vec![Ternary::Pos; 2];
+        let input = vec![Ternary::Pos, Ternary::Neg, Ternary::Pos]; // longer than width
+        let out = layer.process(&input);
+        assert_eq!(out, vec![Ternary::Pos, Ternary::Neg]); // truncated to width
+    }
+
+    #[test]
+    fn test_thalamus_set_gate_out_of_bounds_noop() {
+        let mut t = Thalamus::new(2);
+        t.set_gate(99, false); // should not panic
+        assert_eq!(t.open_channel_count(), 2);
+    }
+
+    #[test]
+    fn test_thalamus_modulate_attention_hysteresis() {
+        // Attention in (-3, 0] should leave gate unchanged
+        let mut t = Thalamus::new(2);
+        t.set_gate(0, false);
+        t.modulate_attention(&[-1]); // -3 < -1, but -1 is NOT < -3
+        assert!(!t.gates[0]); // gate unchanged (was closed, stays closed)
+    }
+
+    #[test]
+    fn test_ternary_mul_all_neg_combinations() {
+        // Verify zero is absorbing on both sides
+        assert_eq!(ternary_mul(Ternary::Neg, Ternary::Zero), Ternary::Zero);
+        assert_eq!(ternary_mul(Ternary::Zero, Ternary::Neg), Ternary::Zero);
     }
 }
